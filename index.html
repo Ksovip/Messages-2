@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="my">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Loop</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#0B0D16;
+    --bg-2:#10121D;
+    --surface:#161927;
+    --surface-hover:#1E2233;
+    --border:#252A3D;
+    --border-soft:#1D2133;
+    --text:#F1F2FA;
+    --muted:#8A8FA8;
+    --muted-soft:#6A6F87;
+    --accent:#35D0BA;
+    --accent-soft:#2AA391;
+    --accent-glow:rgba(53,208,186,.28);
+    --accent-text:#06231F;
+    --coral:#FF6F59;
+    --danger:#FF5470;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html, body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+  }
+  #app{
+    height:100dvh;
+    min-height:100dvh;
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  ::selection{ background:var(--accent-glow); }
+
+  /* custom scrollbar */
+  *::-webkit-scrollbar{ width:8px; height:8px; }
+  *::-webkit-scrollbar-track{ background:transparent; }
+  *::-webkit-scrollbar-thumb{ background:#2A2F44; border-radius:8px; }
+  *::-webkit-scrollbar-thumb:hover{ background:#363C56; }
+
+  input, textarea{
+    background:var(--bg-2);
+    border:1px solid var(--border);
+    border-radius:11px;
+    padding:11px 13px;
+    color:var(--text);
+    font-size:16px;
+    font-family:'Inter',sans-serif;
+    outline:none;
+    width:100%;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  input:focus, textarea:focus{
+    border-color:var(--accent-soft);
+    box-shadow:0 0 0 3px var(--accent-glow);
+  }
+  button{ cursor:pointer; font-family:'Inter',sans-serif; transition:transform .12s ease, opacity .15s ease, background .15s ease, border-color .15s ease; }
+  button:active{ transform:scale(.96); }
+
+  .btn-primary{
+    background:linear-gradient(135deg, var(--accent), var(--accent-soft));
+    border:none;
+    color:var(--accent-text);
+    font-weight:700;
+    border-radius:11px;
+    padding:11px 18px;
+    font-size:14px;
+    box-shadow:0 6px 16px -6px var(--accent-glow);
+    flex-shrink:0;
+  }
+  .btn-primary:hover{ filter:brightness(1.06); box-shadow:0 8px 20px -6px var(--accent-glow); }
+
+  .btn-ghost{
+    background:none;
+    border:1px solid var(--border);
+    color:var(--muted);
+    border-radius:9px;
+    padding:6px 12px;
+    font-size:12px;
+    flex-shrink:0;
+  }
+  .btn-ghost:hover{ border-color:var(--danger); color:var(--danger); }
+
+  .avatar{
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    color:#fff;
+    flex-shrink:0;
+    position:relative;
+    box-shadow:0 2px 8px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.08);
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border-soft);
+    border-radius:16px;
+    padding:16px;
+    transition:border-color .15s ease, transform .15s ease;
+    animation:fadeUp .35s ease both;
+  }
+  @keyframes fadeUp{
+    from{ opacity:0; transform:translateY(6px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .hidden{ display:none !important; }
+  ::placeholder{ color:var(--muted-soft); }
+
+  /* auth screen */
+  #auth-screen{
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(53,208,186,.10) 0%, transparent 45%),
+      radial-gradient(circle at 85% 90%, rgba(255,111,89,.08) 0%, transparent 45%),
+      var(--bg);
+    overflow-y:auto;
+  }
+  #auth-box{ width:100%; max-width:370px; }
+  .brand-row{ display:flex; align-items:center; gap:11px; margin-bottom:30px; justify-content:center; }
+  .brand-title{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:27px; letter-spacing:-.02em; }
+  .auth-tabs{ display:flex; margin-bottom:22px; border-radius:11px; background:var(--bg-2); padding:4px; border:1px solid var(--border-soft); }
+  .auth-tab{
+    flex:1; padding:9px 0; border-radius:8px; border:none;
+    font-weight:600; font-size:13.5px; background:transparent; color:var(--muted);
+  }
+  .auth-tab.active{ background:var(--accent); color:var(--accent-text); box-shadow:0 4px 12px -4px var(--accent-glow); }
+  .auth-card{
+    background:linear-gradient(180deg, var(--surface), var(--bg-2));
+    border:1px solid var(--border-soft);
+    border-radius:18px;
+    padding:26px;
+    box-shadow:0 20px 50px -25px rgba(0,0,0,.7);
+  }
+  .auth-form{ display:flex; flex-direction:column; gap:13px; }
+  .auth-error{ color:var(--danger); font-size:12.5px; background:rgba(255,84,112,.1); border:1px solid rgba(255,84,112,.25); padding:8px 10px; border-radius:8px; }
+  .auth-hint{ color:var(--muted-soft); font-size:11.5px; text-align:center; margin-top:16px; line-height:1.5; }
+
+  /* header / tabs */
+  #main-screen{ height:100%; display:flex; flex-direction:column; overflow:hidden; }
+  #header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 12px;
+    border-bottom:1px solid var(--border-soft);
+    background:linear-gradient(180deg, var(--surface), var(--bg-2));
+    flex-shrink:0;
+  }
+  #tabs{ display:flex; border-bottom:1px solid var(--border-soft); background:var(--bg-2); padding:0 8px; flex-shrink:0; }
+  .tab-btn{
+    flex:1; max-width:180px; padding:12px 0; background:none; border:none; border-bottom:2px solid transparent;
+    color:var(--muted); font-weight:600; font-size:14px; letter-spacing:.01em;
+  }
+  .tab-btn.active{ border-bottom-color:var(--accent); color:var(--text); }
+  .tab-btn:hover{ color:var(--text); }
+
+  #body{ flex:1; overflow:hidden; display:flex; background:var(--bg); min-height:0; }
+  #feed-panel{ flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px; max-width:640px; margin:0 auto; width:100%; padding-bottom:calc(env(safe-area-inset-bottom,0px) + 16px); }
+  .post{ display:flex; flex-direction:column; gap:10px; }
+  .post-head{ display:flex; align-items:center; gap:10px; }
+  .post-meta{ flex:1; min-width:0; }
+  .post-name{ font-weight:600; font-size:14px; }
+  .post-time{ font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--muted-soft); margin-top:1px; }
+  .post-text{ font-size:14.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+  .post-actions{ display:flex; gap:18px; align-items:center; padding-top:2px; }
+  .like-btn{ background:none; border:none; display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--muted); padding:2px 0; }
+  .like-btn:hover{ color:var(--coral); }
+  .like-btn.liked{ color:var(--coral); }
+  .like-btn .heart{ display:inline-block; transition:transform .18s ease; }
+  .like-btn.liked .heart{ animation:pop .28s ease; }
+  @keyframes pop{ 0%{transform:scale(1);} 40%{transform:scale(1.35);} 100%{transform:scale(1);} }
+  .comments{ border-top:1px solid var(--border-soft); padding-top:10px; display:flex; flex-direction:column; gap:7px; }
+  .comment-row{ font-size:13px; line-height:1.5; word-break:break-word; }
+  .comment-input-row{ display:flex; gap:8px; }
+  #posts-empty{ color:var(--muted-soft); text-align:center; margin-top:48px; font-size:13.5px; }
+
+  #chats-panel{ flex:1; display:flex; min-height:0; }
+  #friend-list{ width:190px; border-right:1px solid var(--border-soft); overflow-y:auto; background:var(--bg-2); padding:8px; flex-shrink:0; }
+  .friend-item{ display:flex; align-items:center; gap:9px; padding:9px 10px; cursor:pointer; border-radius:10px; margin-bottom:2px; }
+  .friend-item:hover{ background:var(--surface-hover); }
+  .friend-item.active{ background:var(--surface-hover); box-shadow:inset 2px 0 0 var(--accent); }
+  #chat-window{ flex:1; display:flex; flex-direction:column; min-width:0; }
+  #chat-header{ padding:11px 16px; border-bottom:1px solid var(--border-soft); display:flex; align-items:center; gap:9px; background:var(--surface); flex-shrink:0; }
+  #messages{ flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:9px; }
+  .msg-row{ display:flex; animation:fadeUp .25s ease both; }
+  .msg-row.mine{ justify-content:flex-end; }
+  .bubble{ max-width:78%; padding:9px 13px; border-radius:16px 16px 16px 4px; font-size:13.5px; line-height:1.45; background:var(--surface-hover); color:var(--text); box-shadow:0 2px 6px rgba(0,0,0,.2); word-break:break-word; }
+  .bubble.mine{ background:linear-gradient(135deg, var(--accent), var(--accent-soft)); color:var(--accent-text); border-radius:16px 16px 4px 16px; }
+  #chat-input-row{ display:flex; gap:9px; padding:12px 14px calc(env(safe-area-inset-bottom,0px) + 12px); border-top:1px solid var(--border-soft); background:var(--surface); flex-shrink:0; }
+  #empty-chat{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted-soft); font-size:13px; gap:8px; }
+
+  /* mobile: chats become a two-screen flow — list OR conversation, not side-by-side */
+  @media (max-width: 640px){
+    #header{ padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px; }
+    .brand-title{ font-size:22px; }
+    #feed-panel{ padding:12px; gap:12px; }
+    .card{ padding:13px; border-radius:14px; }
+    #chats-panel{ position:relative; }
+    #friend-list{
+      width:100%; border-right:none; position:absolute; inset:0; z-index:1;
+      transition:transform .22s ease;
+    }
+    #friend-list.chat-open{ transform:translateX(-100%); }
+    #chat-window{
+      position:absolute; inset:0; z-index:2; background:var(--bg);
+      transform:translateX(100%); transition:transform .22s ease;
+    }
+    #chat-window.chat-open{ transform:translateX(0); }
+    #back-to-list{ display:inline-flex !important; }
+  }
+  #back-to-list{ display:none; background:none; border:none; color:var(--text); font-size:18px; padding:4px 6px 4px 0; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen">
+    <div id="auth-box">
+      <div class="brand-row">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+          <circle cx="9" cy="12" r="6.5" stroke="#35D0BA" stroke-width="2"/>
+          <circle cx="15" cy="12" r="6.5" stroke="#FF6F59" stroke-width="2"/>
+        </svg>
+        <span class="brand-title">Loop</span>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-login" onclick="setAuthMode('login')">ဝင်မယ်</button>
+          <button class="auth-tab" id="tab-register" onclick="setAuthMode('register')">အကောင့်ဖွင့်မယ်</button>
+        </div>
+        <form class="auth-form" id="auth-form" onsubmit="handleAuth(event)">
+          <input type="text" id="auth-name" placeholder="နာမည်" class="hidden" />
+          <input type="text" id="auth-user" placeholder="Username" />
+          <input type="password" id="auth-pass" placeholder="Password" />
+          <div class="auth-error hidden" id="auth-error"></div>
+          <button type="submit" class="btn-primary" id="auth-submit" style="margin-top:4px;font-family:'Space Grotesk',sans-serif;font-size:15px;">ဝင်မယ်</button>
+        </form>
+      </div>
+      <div class="auth-hint">
+        ဒီဒေမိုမှာ ဒေတာအားလုံးကို ဒီစာမျက်နှာကိုသုံးသူများအားလုံး မျှဝေမြင်ရပါမယ်.
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="main-screen" class="hidden">
+    <div id="header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <circle cx="9" cy="12" r="6.5" stroke="#35D0BA" stroke-width="2"/>
+          <circle cx="15" cy="12" r="6.5" stroke="#FF6F59" stroke-width="2"/>
+        </svg>
+        <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;">Loop</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="me-avatar" class="avatar" style="width:28px;height:28px;font-size:11px;"></div>
+        <span id="me-name" style="font-size:13px;color:var(--muted);"></span>
+        <button class="btn-ghost" onclick="logout()">ထွက်မယ်</button>
+      </div>
+    </div>
+
+    <div id="tabs">
+      <button class="tab-btn active" id="tab-feed" onclick="setTab('feed')">Feed</button>
+      <button class="tab-btn" id="tab-chats" onclick="setTab('chats')">Chats</button>
+    </div>
+
+    <div id="body">
+      <div id="feed-panel">
+        <div class="card">
+          <textarea id="post-draft" rows="2" placeholder="ဘာဖြစ်နေလဲ..."></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <button class="btn-primary" onclick="submitPost()">တင်မယ်</button>
+          </div>
+        </div>
+        <div id="posts-list"></div>
+      </div>
+
+      <div id="chats-panel" class="hidden">
+        <div id="friend-list"></div>
+        <div id="chat-window">
+          <div id="empty-chat">သူငယ်ချင်းတစ်ယောက် ရွေးပါ</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const STORAGE_KEY = "loop-app-state-v1";
+const ONLINE_WINDOW = 45000; // ms — considered online if active within this window
+const HEARTBEAT_MS = 15000;
+const REFRESH_MS = 8000;
+
+function isOnline(username){
+  const rec = state.users[username];
+  return !!(rec && rec.lastActive && (Date.now() - rec.lastActive) < ONLINE_WINDOW);
+}
+
+function lastMessageInfo(friendId){
+  const key = convoKey(currentUser.username, friendId);
+  const msgs = state.chats[key];
+  if(!msgs || msgs.length===0) return null;
+  const last = msgs[msgs.length-1];
+  return { text: last.text, time: last.time, mine: last.from === currentUser.username };
+}
+
+function getFriends(){
+  // only real registered accounts show up as friends, never seeded/fake people
+  const list = Object.keys(state.users)
+    .filter(u => u !== currentUser.username)
+    .map(u => {
+      const info = lastMessageInfo(u);
+      return {
+        id: u,
+        name: state.users[u].name,
+        online: isOnline(u),
+        lastTime: info ? info.time : 0,
+        lastText: info ? info.text : null,
+        lastMine: info ? info.mine : false,
+      };
+    });
+  // messenger-style: most recently chatted friends float to the top
+  list.sort((a,b) => b.lastTime - a.lastTime || a.name.localeCompare(b.name));
+  return list;
+}
+
+function timeAgo(ts){
+  const diff = Math.max(0, Date.now() - ts);
+  const m = Math.floor(diff/60000);
+  if(m < 1) return "အခုလေးတင်";
+  if(m < 60) return m + "မိနစ်";
+  const h = Math.floor(m/60);
+  if(h < 24) return h + "နာရီ";
+  return Math.floor(h/24) + "ရက်";
+}
+
+const GRADIENTS = [
+  ["#35D0BA","#1E7A6D"],["#FF6F59","#B8422F"],["#6C7BFF","#3A3F9E"],
+  ["#FFC85C","#B8862F"],["#FF5470","#8E2A3D"],
+];
+
+let state = { users:{}, posts:[], chats:{} };
+let currentUser = null;   // {username, name}
+let authMode = "login";
+let activeTab = "feed";
+let activeFriend = null;
+let commentDrafts = {};
+
+/* ---------- persistence ---------- */
+async function loadState(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, true);
+    if(res && res.value){
+      const data = JSON.parse(res.value);
+      state.users = data.users || {};
+      state.posts = data.posts || [];
+      state.chats = data.chats || {};
+    }
+  }catch(e){ /* nothing stored yet */ }
+}
+async function saveState(){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(state), true);
+  }catch(e){ console.error("save failed", e); }
+}
+
+/* ---------- helpers ---------- */
+function gradientFor(name){
+  let h = 0;
+  for(let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) % GRADIENTS.length;
+  return GRADIENTS[h];
+}
+function avatarHTML(name, size, online){
+  const [a,b] = gradientFor(name || "?");
+  const initials = (name||"?").trim().slice(0,2).toUpperCase();
+  const dot = online ? `<div style="position:absolute;bottom:-1px;right:-1px;width:${size*0.28}px;height:${size*0.28}px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);"></div>` : "";
+  return `<div class="avatar" style="width:${size}px;height:${size}px;font-size:${size*0.36}px;background:linear-gradient(135deg, ${a}, ${b});">${initials}${dot}</div>`;
+}
+function convoKey(a,b){ return [a,b].sort().join("::"); }
+function esc(s){ const d=document.createElement("div"); d.innerText = s; return d.innerHTML; }
+
+/* ---------- auth ---------- */
+function setAuthMode(mode){
+  authMode = mode;
+  document.getElementById("tab-login").classList.toggle("active", mode==="login");
+  document.getElementById("tab-register").classList.toggle("active", mode==="register");
+  document.getElementById("auth-name").classList.toggle("hidden", mode!=="register");
+  document.getElementById("auth-submit").innerText = mode==="login" ? "ဝင်မယ်" : "စတင်မယ်";
+  document.getElementById("auth-error").classList.add("hidden");
+}
+
+async function handleAuth(e){
+  e.preventDefault();
+  const errEl = document.getElementById("auth-error");
+  errEl.classList.add("hidden");
+
+  const name = document.getElementById("auth-name").value.trim();
+  const u = document.getElementById("auth-user").value.trim().toLowerCase();
+  const p = document.getElementById("auth-pass").value;
+
+  if(!u || !p){ showAuthError("Username နဲ့ Password ဖြည့်ပါ"); return; }
+
+  if(authMode === "register"){
+    if(state.users[u]){ showAuthError("ဒီ username ရှိပြီးသားပါ"); return; }
+    if(!name){ showAuthError("နာမည် ဖြည့်ပါ"); return; }
+    state.users[u] = { password:p, name, lastActive: Date.now() };
+    await saveState();
+    currentUser = { username:u, name };
+  } else {
+    const rec = state.users[u];
+    if(!rec || rec.password !== p){ showAuthError("Username (သို့) Password မှားနေပါတယ်"); return; }
+    rec.lastActive = Date.now();
+    await saveState();
+    currentUser = { username:u, name:rec.name };
+  }
+
+  document.getElementById("auth-user").value = "";
+  document.getElementById("auth-pass").value = "";
+  document.getElementById("auth-name").value = "";
+  enterApp();
+}
+function showAuthError(msg){
+  const el = document.getElementById("auth-error");
+  el.innerText = msg;
+  el.classList.remove("hidden");
+}
+
+let heartbeatTimer = null;
+let refreshTimer = null;
+
+function enterApp(){
+  document.getElementById("auth-screen").classList.add("hidden");
+  document.getElementById("main-screen").classList.remove("hidden");
+  document.getElementById("me-avatar").outerHTML = avatarHTML(currentUser.name, 28, false).replace('class="avatar"', 'id="me-avatar" class="avatar"');
+  document.getElementById("me-name").innerText = currentUser.name;
+  renderPosts();
+  renderFriendList();
+
+  heartbeatTimer = setInterval(async ()=>{
+    if(!currentUser) return;
+    state.users[currentUser.username].lastActive = Date.now();
+    await saveState();
+  }, HEARTBEAT_MS);
+
+  refreshTimer = setInterval(async ()=>{
+    if(!currentUser) return;
+    await loadState();
+    if(activeTab === "feed") renderPosts();
+    if(activeTab === "chats"){ renderFriendList(); renderChatWindow(); }
+  }, REFRESH_MS);
+}
+function logout(){
+  currentUser = null;
+  activeTab = "feed";
+  activeFriend = null;
+  if(heartbeatTimer) clearInterval(heartbeatTimer);
+  if(refreshTimer) clearInterval(refreshTimer);
+  document.getElementById("main-screen").classList.add("hidden");
+  document.getElementById("auth-screen").classList.remove("hidden");
+  setTab("feed");
+}
+
+/* ---------- tabs ---------- */
+function setTab(tab){
+  activeTab = tab;
+  document.getElementById("tab-feed").classList.toggle("active", tab==="feed");
+  document.getElementById("tab-chats").classList.toggle("active", tab==="chats");
+  document.getElementById("feed-panel").classList.toggle("hidden", tab!=="feed");
+  document.getElementById("chats-panel").classList.toggle("hidden", tab!=="chats");
+}
+
+/* ---------- posts ---------- */
+async function submitPost(){
+  const el = document.getElementById("post-draft");
+  const text = el.value.trim();
+  if(!text) return;
+  state.posts.unshift({
+    id: "p"+Date.now(),
+    authorId: currentUser.username,
+    authorName: currentUser.name,
+    text,
+    likes: [],
+    comments: [],
+    createdAt: Date.now(),
+  });
+  el.value = "";
+  await saveState();
+  renderPosts();
+}
+
+async function toggleLike(postId){
+  const post = state.posts.find(p=>p.id===postId);
+  if(!post) return;
+  const idx = post.likes.indexOf(currentUser.username);
+  if(idx>-1) post.likes.splice(idx,1); else post.likes.push(currentUser.username);
+  await saveState();
+  renderPosts();
+}
+
+async function addComment(postId){
+  const input = document.getElementById("comment-"+postId);
+  const text = (input.value||"").trim();
+  if(!text) return;
+  const post = state.posts.find(p=>p.id===postId);
+  post.comments.push({ id:"c"+Date.now(), author:currentUser.name, text });
+  await saveState();
+  renderPosts();
+}
+
+async function deletePost(postId){
+  state.posts = state.posts.filter(p=>p.id!==postId);
+  await saveState();
+  renderPosts();
+}
+
+function renderPosts(){
+  const list = document.getElementById("posts-list");
+  if(state.posts.length===0){
+    list.innerHTML = `<div id="posts-empty">✍️ ပထမဆုံး Post ကို တင်လိုက်ပါ</div>`;
+    return;
+  }
+  list.innerHTML = state.posts.map(p=>{
+    const liked = p.likes.includes(currentUser.username);
+    const canDelete = p.authorId === currentUser.username;
+    return `
+      <div class="card post">
+        <div class="post-head">
+          ${avatarHTML(p.authorName, 34, false)}
+          <div class="post-meta">
+            <div class="post-name">${esc(p.authorName)}</div>
+            <div class="post-time">${new Date(p.createdAt).toLocaleString()}</div>
+          </div>
+          ${canDelete ? `<button class="btn-ghost" style="border:none;color:var(--danger);" onclick="deletePost('${p.id}')">ဖျက်မယ်</button>` : ""}
+        </div>
+        <div class="post-text">${esc(p.text)}</div>
+        <div class="post-actions">
+          <button class="like-btn ${liked?'liked':''}" onclick="toggleLike('${p.id}')"><span class="heart">${liked?'♥':'♡'}</span> ${p.likes.length}</button>
+          <span style="color:var(--muted);font-size:13px;">💬 ${p.comments.length}</span>
+        </div>
+        ${p.comments.length>0 ? `
+          <div class="comments">
+            ${p.comments.map(c=>`<div class="comment-row"><span style="font-weight:600;">${esc(c.author)}: </span><span style="color:var(--muted);">${esc(c.text)}</span></div>`).join("")}
+          </div>` : ""}
+        <div class="comment-input-row">
+          <input id="comment-${p.id}" placeholder="Comment ရေးမယ်..." onkeydown="if(event.key==='Enter') addComment('${p.id}')" />
+          <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="addComment('${p.id}')">ပို့မယ်</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+/* ---------- chats ---------- */
+function renderFriendList(){
+  const list = document.getElementById("friend-list");
+  const friends = getFriends();
+  if(friends.length===0){
+    list.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px;">အကောင့်ဖွင့်ထားတဲ့ သူငယ်ချင်းမရှိသေးပါ</div>`;
+    return;
+  }
+  list.innerHTML = friends.map(f=>{
+    const preview = f.lastText
+      ? `${f.lastMine ? "You: " : ""}${esc(f.lastText)}`
+      : `<span style="color:var(--muted-soft);">Message ပို့လိုက်ပါ</span>`;
+    return `
+    <div class="friend-item ${activeFriend && activeFriend.id===f.id ? 'active':''}" onclick="openFriend('${f.id}')">
+      ${avatarHTML(f.name, 34, f.online)}
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;">
+          <span style="font-size:13px;font-weight:600;">${esc(f.name)}</span>
+          ${f.lastTime ? `<span style="font-size:10px;color:var(--muted-soft);flex-shrink:0;">${timeAgo(f.lastTime)}</span>` : ""}
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">${preview}</div>
+      </div>
+    </div>
+  `;
+  }).join("");
+}
+
+function openFriend(friendId){
+  activeFriend = getFriends().find(f=>f.id===friendId);
+  renderFriendList();
+  renderChatWindow();
+  document.getElementById("friend-list").classList.add("chat-open");
+  document.getElementById("chat-window").classList.add("chat-open");
+}
+
+function backToList(){
+  document.getElementById("friend-list").classList.remove("chat-open");
+  document.getElementById("chat-window").classList.remove("chat-open");
+}
+
+function renderChatWindow(){
+  const win = document.getElementById("chat-window");
+  if(!activeFriend){
+    win.innerHTML = `<div id="empty-chat"><span style="font-size:28px;">💬</span><span>သူငယ်ချင်းတစ်ယောက် ရွေးပါ</span></div>`;
+    return;
+  }
+  const key = convoKey(currentUser.username, activeFriend.id);
+  const msgs = state.chats[key] || [];
+  win.innerHTML = `
+    <div id="chat-header">
+      <button id="back-to-list" onclick="backToList()">←</button>
+      ${avatarHTML(activeFriend.name, 26, isOnline(activeFriend.id))}
+      <div>
+        <div style="font-weight:600;font-size:13.5px;">${esc(activeFriend.name)}</div>
+        <div style="font-size:10.5px;color:${isOnline(activeFriend.id) ? 'var(--accent)' : 'var(--muted-soft)'};">${isOnline(activeFriend.id) ? "အွန်လိုင်း" : "အော့ဖ်လိုင်း"}</div>
+      </div>
+    </div>
+    <div id="messages">
+      ${msgs.map(m=>{
+        const mine = m.from === currentUser.username;
+        return `<div class="msg-row ${mine?'mine':''}"><div class="bubble ${mine?'mine':''}">${esc(m.text)}</div></div>`;
+      }).join("")}
+    </div>
+    <div id="chat-input-row">
+      <input id="msg-draft" placeholder="Message ရေးမယ်..." onkeydown="if(event.key==='Enter') sendMessage()" />
+      <button class="btn-primary" onclick="sendMessage()">ပို့မယ်</button>
+    </div>
+  `;
+  const box = document.getElementById("messages");
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendMessage(){
+  const input = document.getElementById("msg-draft");
+  const text = (input.value||"").trim();
+  if(!text || !activeFriend) return;
+  const key = convoKey(currentUser.username, activeFriend.id);
+  if(!state.chats[key]) state.chats[key] = [];
+  state.chats[key].push({ id:"m"+Date.now(), from:currentUser.username, text, time:Date.now() });
+  await saveState();
+  renderChatWindow();
+  renderFriendList();
+}
+
+/* ---------- init ---------- */
+(async function init(){
+  await loadState();
+})();
+</script>
+</body>
+</html>
