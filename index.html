@@ -298,6 +298,16 @@
 </div>
 
 <script>
+// ADMIN SETUP: အမှန်ချစ်ပေးချင်တဲ့ Username တွေကို ဒီထဲမှာ ထည့်ပါ
+const VERIFIED_USERS = ["admin", "myname", "k"]; 
+
+function isVerified(username) {
+  return VERIFIED_USERS.includes(username.toLowerCase());
+}
+
+// Verified Badge SVG
+const verifiedBadge = `<svg width="14" height="14" viewBox="0 0 24 24" fill="#35D0BA" style="margin-left:4px; vertical-align:middle;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`;
+
 const STORAGE_KEY = "loop-app-state-v1";
 const ONLINE_WINDOW = 45000;
 const HEARTBEAT_MS = 15000;
@@ -355,7 +365,6 @@ let authMode = "login";
 let activeTab = "feed";
 let activeFriend = null;
 
-/* ---------- persistence (Fixed) ---------- */
 async function loadState(){
   try{
     const dataStr = localStorage.getItem(STORAGE_KEY);
@@ -374,7 +383,6 @@ async function saveState(){
   }catch(e){ console.error("save failed", e); }
 }
 
-/* ---------- helpers ---------- */
 function gradientFor(name){
   let h = 0;
   for(let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) % GRADIENTS.length;
@@ -389,7 +397,6 @@ function avatarHTML(name, size, online){
 function convoKey(a,b){ return [a,b].sort().join("::"); }
 function esc(s){ const d=document.createElement("div"); d.innerText = s; return d.innerHTML; }
 
-/* ---------- auth ---------- */
 function setAuthMode(mode){
   authMode = mode;
   document.getElementById("tab-login").classList.toggle("active", mode==="login");
@@ -442,7 +449,11 @@ function enterApp(){
   document.getElementById("auth-screen").classList.add("hidden");
   document.getElementById("main-screen").classList.remove("hidden");
   document.getElementById("me-avatar").outerHTML = avatarHTML(currentUser.name, 28, false).replace('class="avatar"', 'id="me-avatar" class="avatar"');
-  document.getElementById("me-name").innerText = currentUser.name;
+  
+  // Header အတွက် Verified check
+  const badge = isVerified(currentUser.username) ? verifiedBadge : "";
+  document.getElementById("me-name").innerHTML = currentUser.name + badge;
+  
   renderPosts();
   renderFriendList();
 
@@ -530,12 +541,16 @@ function renderPosts(){
   list.innerHTML = state.posts.map(p=>{
     const liked = p.likes.includes(currentUser.username);
     const canDelete = p.authorId === currentUser.username;
+    
+    // Post အတွက် Verified check
+    const badge = isVerified(p.authorId) ? verifiedBadge : "";
+    
     return `
       <div class="card post">
         <div class="post-head">
           ${avatarHTML(p.authorName, 34, false)}
           <div class="post-meta">
-            <div class="post-name">${esc(p.authorName)}</div>
+            <div class="post-name">${esc(p.authorName)} ${badge}</div>
             <div class="post-time">${new Date(p.createdAt).toLocaleString()}</div>
           </div>
           ${canDelete ? `<button class="btn-ghost" style="border:none;color:var(--danger);" onclick="deletePost('${p.id}')">ဖျက်မယ်</button>` : ""}
@@ -603,6 +618,10 @@ function renderChatWindow(){
     win.innerHTML = `<div id="empty-chat"><span style="font-size:28px;">💬</span><span>သူငယ်ချင်းတစ်ယောက် ရွေးပါ</span></div>`;
     return;
   }
+  
+  // Chat Header အတွက် Verified check
+  const badge = isVerified(activeFriend.id) ? verifiedBadge : "";
+  
   const key = convoKey(currentUser.username, activeFriend.id);
   const msgs = state.chats[key] || [];
   win.innerHTML = `
@@ -610,7 +629,7 @@ function renderChatWindow(){
       <button id="back-to-list" onclick="backToList()">←</button>
       ${avatarHTML(activeFriend.name, 26, isOnline(activeFriend.id))}
       <div>
-        <div style="font-weight:600;font-size:13.5px;">${esc(activeFriend.name)}</div>
+        <div style="font-weight:600;font-size:13.5px;">${esc(activeFriend.name)} ${badge}</div>
         <div style="font-size:10.5px;color:${isOnline(activeFriend.id) ? 'var(--accent)' : 'var(--muted-soft)'};">${isOnline(activeFriend.id) ? "အွန်လိုင်း" : "အော့ဖ်လိုင်း"}</div>
       </div>
     </div>
