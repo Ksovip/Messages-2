@@ -44,7 +44,6 @@
   }
   ::selection{ background:var(--accent-glow); }
 
-  /* custom scrollbar */
   *::-webkit-scrollbar{ width:8px; height:8px; }
   *::-webkit-scrollbar-track{ background:transparent; }
   *::-webkit-scrollbar-thumb{ background:#2A2F44; border-radius:8px; }
@@ -120,7 +119,6 @@
   .hidden{ display:none !important; }
   ::placeholder{ color:var(--muted-soft); }
 
-  /* auth screen */
   #auth-screen{
     height:100%;
     display:flex;
@@ -153,7 +151,6 @@
   .auth-error{ color:var(--danger); font-size:12.5px; background:rgba(255,84,112,.1); border:1px solid rgba(255,84,112,.25); padding:8px 10px; border-radius:8px; }
   .auth-hint{ color:var(--muted-soft); font-size:11.5px; text-align:center; margin-top:16px; line-height:1.5; }
 
-  /* header / tabs */
   #main-screen{ height:100%; display:flex; flex-direction:column; overflow:hidden; }
   #header{
     display:flex; align-items:center; justify-content:space-between;
@@ -205,7 +202,6 @@
   #chat-input-row{ display:flex; gap:9px; padding:12px 14px calc(env(safe-area-inset-bottom,0px) + 12px); border-top:1px solid var(--border-soft); background:var(--surface); flex-shrink:0; }
   #empty-chat{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted-soft); font-size:13px; gap:8px; }
 
-  /* mobile: chats become a two-screen flow — list OR conversation, not side-by-side */
   @media (max-width: 640px){
     #header{ padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px; }
     .brand-title{ font-size:22px; }
@@ -231,7 +227,6 @@
 
 <div id="app">
 
-  <!-- AUTH SCREEN -->
   <div id="auth-screen">
     <div id="auth-box">
       <div class="brand-row">
@@ -261,7 +256,6 @@
     </div>
   </div>
 
-  <!-- MAIN APP -->
   <div id="main-screen" class="hidden">
     <div id="header">
       <div style="display:flex;align-items:center;gap:8px;">
@@ -306,44 +300,188 @@
 </div>
 
 <script>
-const STORAGE_KEY = "loop-app-state-v1";
-const ONLINE_WINDOW = 45000; // ms — considered online if active within this window
+/* =========================================================================
+   STORAGE ARCHITECTURE
+   ---------------------------------------------------------------------
+   Previously this app stored EVERYTHING (all users, all posts, all chats)
+   under a single shared key. A heartbeat timer resaved that whole blob
+   every 15s using whatever local copy a given browser tab happened to
+   hold. Because the app is a shared multi-user demo, one person's
+   heartbeat write could silently overwrite another person's brand-new
+   account (last-write-wins), which is why some accounts stopped being
+   able to log back in.
+
+   Fix: every user, post, and chat now lives under its OWN storage key.
+   A heartbeat only ever touches its own user's key, so it can never
+   clobber anyone else's account or data again.
+   ========================================================================= */
+
+const ONLINE_WINDOW = 45000;
 const HEARTBEAT_MS = 15000;
 const REFRESH_MS = 8000;
 
-function isOnline(username){
-  const rec = state.users[username];
-  return !!(rec && rec.lastActive && (Date.now() - rec.lastActive) < ONLINE_WINDOW);
+const GRADIENTS = [
+  ["#35D0BA","#1E7A6D"],["#FF6F59","#B8422F"],["#6C7BFF","#3A3F9E"],
+  ["#FFC85C","#B8862F"],["#FF5470","#8E2A3D"],
+];
+
+let usersCache = {};
+let postsCache = [];
+let chatsCache = {};
+let friendsCache = [];
+
+let currentUser = null;
+let authMode = "login";
+let activeTab = "feed";
+let activeFriend = null;
+let heartbeatTimer = null;
+let refreshTimer = null;
+
+function userKey(u){ return "user-" + u; }
+function postKey(id){ return "post-" + id; }
+function chatKey(key){ return "chat-" + key; }
+
+async function getJSON(key, shared){
+  try{
+    const res = await window.storage.get(key, shared);
+    if(res && res.value) return JSON.parse(res.value);
+    return null;
+  }catch(e){
+    return null;
+  }
+}
+async function setJSON(key, value, shared){
+  try{
+    const res = await window.storage.set(key, JSON.stringify(value), shared);
+    return !!res;
+  }catch(e){
+    console.error("save failed", key, e);
+    return false;
+  }
 }
 
-function lastMessageInfo(friendId){
+async function loadUsersIndex(){
+  const idx = await getJSON("users-index", true);
+  return Array.isArray(idx) ? idx : [];
+}
+async function addUserToIndex(username){
+  const idx = await loadUsersIndex();
+  if(!idx.includes(username)){
+    idx.push(username);
+    return await setJSON("users-index", idx, true);
+  }
+  return true;
+}
+async function loadUser(username){
+  return await getJSON(userKey(username), true);
+}
+async function saveUser(username, rec){
+  return await setJSON(userKey(username), rec, true);
+}
+async function refreshUsers(){
+  const idx = await loadUsersIndex();
+  const entries = await Promise.all(idx.map(async u => {
+    const rec = await loadUser(u);
+    return rec ? [u, rec] : null;
+  }));
+  usersCache = {};
+  entries.filter(Boolean).forEach(([u, rec]) => { usersCache[u] = rec; });
+}
+
+async function loadPostsIndex(){
+  const idx = await getJSON("posts-index", true);
+  return Array.isArray(idx) ? idx : [];
+}
+async function addPostToIndex(id){
+  const idx = await loadPostsIndex();
+  idx.unshift(id);
+  return await setJSON("posts-index", idx, true);
+}
+async function removePostFromIndex(id){
+  const idx = await loadPostsIndex();
+  return await setJSON("posts-index", idx.filter(x => x !== id), true);
+}
+async function loadPost(id){
+  return await getJSON(postKey(id), true);
+}
+async function savePost(post){
+  return await setJSON(postKey(post.id), post, true);
+}
+async function deletePostKey(id){
+  try{ await window.storage.delete(postKey(id), true); }catch(e){ /* ignore */ }
+}
+async function refreshPosts(){
+  const idx = await loadPostsIndex();
+  const loaded = await Promise.all(idx.map(id => loadPost(id)));
+  postsCache = loaded.filter(Boolean);
+}
+
+async function loadChat(key){
+  const msgs = await getJSON(chatKey(key), true);
+  return Array.isArray(msgs) ? msgs : [];
+}
+async function saveChat(key, msgs){
+  return await setJSON(chatKey(key), msgs, true);
+}
+
+async function checkStorageOK(retries){
+  retries = retries === undefined ? 2 : retries;
+  try{
+    await window.storage.list("", true);
+    return true;
+  }catch(e){
+    const msg = (e && (e.message || e.toString())) || "";
+    if(/not.?found/i.test(msg) || /404/.test(msg)) return true;
+    if(retries > 0){
+      await new Promise(r=>setTimeout(r, 400));
+      return checkStorageOK(retries - 1);
+    }
+    return false;
+  }
+}
+function showStorageWarning(show){
+  let el = document.getElementById("storage-warning");
+  if(show){
+    if(!el){
+      el = document.createElement("div");
+      el.id = "storage-warning";
+      el.style.cssText = "position:fixed;top:8px;left:50%;transform:translateX(-50%);background:#3A1420;border:1px solid var(--danger);color:#FFD3DB;font-size:12px;padding:8px 14px;border-radius:10px;z-index:999;max-width:90%;text-align:center;";
+      el.innerText = "⚠ Server ကို ချိတ်ဆက်လို့ မရသေးပါ — ခဏနေ ထပ်စမ်းကြည့်ပါ";
+      document.body.appendChild(el);
+    }
+  } else if(el){
+    el.remove();
+  }
+}
+
+function isOnline(username){
+  const rec = usersCache[username];
+  return !!(rec && rec.lastActive && (Date.now() - rec.lastActive) < ONLINE_WINDOW);
+}
+async function lastMessageInfo(friendId){
   const key = convoKey(currentUser.username, friendId);
-  const msgs = state.chats[key];
+  chatsCache[key] = await loadChat(key);
+  const msgs = chatsCache[key];
   if(!msgs || msgs.length===0) return null;
   const last = msgs[msgs.length-1];
   return { text: last.text, time: last.time, mine: last.from === currentUser.username };
 }
-
-function getFriends(){
-  // only real registered accounts show up as friends, never seeded/fake people
-  const list = Object.keys(state.users)
-    .filter(u => u !== currentUser.username)
-    .map(u => {
-      const info = lastMessageInfo(u);
-      return {
-        id: u,
-        name: state.users[u].name,
-        online: isOnline(u),
-        lastTime: info ? info.time : 0,
-        lastText: info ? info.text : null,
-        lastMine: info ? info.mine : false,
-      };
-    });
-  // messenger-style: most recently chatted friends float to the top
+async function getFriends(){
+  const usernames = Object.keys(usersCache).filter(u => u !== currentUser.username);
+  const list = await Promise.all(usernames.map(async u => {
+    const info = await lastMessageInfo(u);
+    return {
+      id: u,
+      name: usersCache[u].name,
+      online: isOnline(u),
+      lastTime: info ? info.time : 0,
+      lastText: info ? info.text : null,
+      lastMine: info ? info.mine : false,
+    };
+  }));
   list.sort((a,b) => b.lastTime - a.lastTime || a.name.localeCompare(b.name));
   return list;
 }
-
 function timeAgo(ts){
   const diff = Math.max(0, Date.now() - ts);
   const m = Math.floor(diff/60000);
@@ -353,38 +491,6 @@ function timeAgo(ts){
   if(h < 24) return h + "နာရီ";
   return Math.floor(h/24) + "ရက်";
 }
-
-const GRADIENTS = [
-  ["#35D0BA","#1E7A6D"],["#FF6F59","#B8422F"],["#6C7BFF","#3A3F9E"],
-  ["#FFC85C","#B8862F"],["#FF5470","#8E2A3D"],
-];
-
-let state = { users:{}, posts:[], chats:{} };
-let currentUser = null;   // {username, name}
-let authMode = "login";
-let activeTab = "feed";
-let activeFriend = null;
-let commentDrafts = {};
-
-/* ---------- persistence ---------- */
-async function loadState(){
-  try{
-    const res = await window.storage.get(STORAGE_KEY, true);
-    if(res && res.value){
-      const data = JSON.parse(res.value);
-      state.users = data.users || {};
-      state.posts = data.posts || [];
-      state.chats = data.chats || {};
-    }
-  }catch(e){ /* nothing stored yet */ }
-}
-async function saveState(){
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(state), true);
-  }catch(e){ console.error("save failed", e); }
-}
-
-/* ---------- helpers ---------- */
 function gradientFor(name){
   let h = 0;
   for(let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) % GRADIENTS.length;
@@ -398,8 +504,8 @@ function avatarHTML(name, size, online){
 }
 function convoKey(a,b){ return [a,b].sort().join("::"); }
 function esc(s){ const d=document.createElement("div"); d.innerText = s; return d.innerHTML; }
+function genId(prefix){ return prefix + Date.now() + "-" + Math.random().toString(36).slice(2,7); }
 
-/* ---------- auth ---------- */
 function setAuthMode(mode){
   authMode = mode;
   document.getElementById("tab-login").classList.toggle("active", mode==="login");
@@ -420,24 +526,46 @@ async function handleAuth(e){
 
   if(!u || !p){ showAuthError("Username နဲ့ Password ဖြည့်ပါ"); return; }
 
+  const submitBtn = document.getElementById("auth-submit");
+  const originalLabel = submitBtn.innerText;
+  submitBtn.innerText = "…";
+  submitBtn.disabled = true;
+
+  const finish = () => { submitBtn.innerText = originalLabel; submitBtn.disabled = false; };
+
   if(authMode === "register"){
-    if(state.users[u]){ showAuthError("ဒီ username ရှိပြီးသားပါ"); return; }
-    if(!name){ showAuthError("နာမည် ဖြည့်ပါ"); return; }
-    state.users[u] = { password:p, name, lastActive: Date.now() };
-    await saveState();
+    if(!name){ finish(); showAuthError("နာမည် ဖြည့်ပါ"); return; }
+    const existing = await loadUser(u);
+    if(existing){ finish(); showAuthError("ဒီ username ရှိပြီးသားပါ"); return; }
+
+    const rec = { password:p, name, lastActive: Date.now() };
+    const savedUser = await saveUser(u, rec);
+    const savedIndex = savedUser && await addUserToIndex(u);
+    finish();
+    if(!savedUser || !savedIndex){
+      showStorageWarning(true);
+      showAuthError("အကောင့်ကို သိမ်းလို့ မရပါ — ထပ်စမ်းကြည့်ပါ");
+      return;
+    }
+    usersCache[u] = rec;
     currentUser = { username:u, name };
   } else {
-    const rec = state.users[u];
-    if(!rec || rec.password !== p){ showAuthError("Username (သို့) Password မှားနေပါတယ်"); return; }
+    const rec = await loadUser(u);
+    finish();
+    if(!rec || rec.password !== p){
+      showAuthError("Username (သို့) Password မှားနေပါတယ်");
+      return;
+    }
     rec.lastActive = Date.now();
-    await saveState();
+    await saveUser(u, rec);
+    usersCache[u] = rec;
     currentUser = { username:u, name:rec.name };
   }
 
   document.getElementById("auth-user").value = "";
   document.getElementById("auth-pass").value = "";
   document.getElementById("auth-name").value = "";
-  enterApp();
+  await enterApp();
 }
 function showAuthError(msg){
   const el = document.getElementById("auth-error");
@@ -445,30 +573,43 @@ function showAuthError(msg){
   el.classList.remove("hidden");
 }
 
-let heartbeatTimer = null;
-let refreshTimer = null;
-
-function enterApp(){
+async function enterApp(){
   document.getElementById("auth-screen").classList.add("hidden");
   document.getElementById("main-screen").classList.remove("hidden");
   document.getElementById("me-avatar").outerHTML = avatarHTML(currentUser.name, 28, false).replace('class="avatar"', 'id="me-avatar" class="avatar"');
   document.getElementById("me-name").innerText = currentUser.name;
+
+  await refreshUsers();
+  await refreshPosts();
   renderPosts();
-  renderFriendList();
+  await renderFriendList();
 
   heartbeatTimer = setInterval(async ()=>{
     if(!currentUser) return;
-    state.users[currentUser.username].lastActive = Date.now();
-    await saveState();
+    const rec = (await loadUser(currentUser.username)) || usersCache[currentUser.username];
+    if(!rec) return;
+    rec.lastActive = Date.now();
+    await saveUser(currentUser.username, rec);
+    usersCache[currentUser.username] = rec;
   }, HEARTBEAT_MS);
 
   refreshTimer = setInterval(async ()=>{
     if(!currentUser) return;
-    await loadState();
-    if(activeTab === "feed") renderPosts();
-    if(activeTab === "chats"){ renderFriendList(); renderChatWindow(); }
+    await refreshUsers();
+    if(activeTab === "feed"){
+      await refreshPosts();
+      renderPosts();
+    }
+    if(activeTab === "chats"){
+      await renderFriendList();
+      if(activeFriend){
+        chatsCache[convoKey(currentUser.username, activeFriend.id)] = await loadChat(convoKey(currentUser.username, activeFriend.id));
+        renderChatWindow();
+      }
+    }
   }, REFRESH_MS);
 }
+
 function logout(){
   currentUser = null;
   activeTab = "feed";
@@ -480,7 +621,6 @@ function logout(){
   setTab("feed");
 }
 
-/* ---------- tabs ---------- */
 function setTab(tab){
   activeTab = tab;
   document.getElementById("tab-feed").classList.toggle("active", tab==="feed");
@@ -489,31 +629,38 @@ function setTab(tab){
   document.getElementById("chats-panel").classList.toggle("hidden", tab!=="chats");
 }
 
-/* ---------- posts ---------- */
 async function submitPost(){
   const el = document.getElementById("post-draft");
   const text = el.value.trim();
   if(!text) return;
-  state.posts.unshift({
-    id: "p"+Date.now(),
+  const post = {
+    id: genId("p"),
     authorId: currentUser.username,
     authorName: currentUser.name,
     text,
     likes: [],
     comments: [],
     createdAt: Date.now(),
-  });
+  };
   el.value = "";
-  await saveState();
-  renderPosts();
+  const ok1 = await savePost(post);
+  const ok2 = ok1 && await addPostToIndex(post.id);
+  if(ok1 && ok2){
+    postsCache.unshift(post);
+    renderPosts();
+  }else{
+    showStorageWarning(true);
+  }
 }
 
 async function toggleLike(postId){
-  const post = state.posts.find(p=>p.id===postId);
+  const post = (await loadPost(postId)) || postsCache.find(p=>p.id===postId);
   if(!post) return;
   const idx = post.likes.indexOf(currentUser.username);
   if(idx>-1) post.likes.splice(idx,1); else post.likes.push(currentUser.username);
-  await saveState();
+  await savePost(post);
+  const i = postsCache.findIndex(p=>p.id===postId);
+  if(i>-1) postsCache[i] = post; else postsCache.unshift(post);
   renderPosts();
 }
 
@@ -521,25 +668,29 @@ async function addComment(postId){
   const input = document.getElementById("comment-"+postId);
   const text = (input.value||"").trim();
   if(!text) return;
-  const post = state.posts.find(p=>p.id===postId);
-  post.comments.push({ id:"c"+Date.now(), author:currentUser.name, text });
-  await saveState();
+  const post = (await loadPost(postId)) || postsCache.find(p=>p.id===postId);
+  if(!post) return;
+  post.comments.push({ id:genId("c"), author:currentUser.name, text });
+  await savePost(post);
+  const i = postsCache.findIndex(p=>p.id===postId);
+  if(i>-1) postsCache[i] = post; else postsCache.unshift(post);
   renderPosts();
 }
 
 async function deletePost(postId){
-  state.posts = state.posts.filter(p=>p.id!==postId);
-  await saveState();
+  postsCache = postsCache.filter(p=>p.id!==postId);
   renderPosts();
+  await removePostFromIndex(postId);
+  await deletePostKey(postId);
 }
 
 function renderPosts(){
   const list = document.getElementById("posts-list");
-  if(state.posts.length===0){
+  if(postsCache.length===0){
     list.innerHTML = `<div id="posts-empty">✍️ ပထမဆုံး Post ကို တင်လိုက်ပါ</div>`;
     return;
   }
-  list.innerHTML = state.posts.map(p=>{
+  list.innerHTML = postsCache.map(p=>{
     const liked = p.likes.includes(currentUser.username);
     const canDelete = p.authorId === currentUser.username;
     return `
@@ -570,15 +721,18 @@ function renderPosts(){
   }).join("");
 }
 
-/* ---------- chats ---------- */
-function renderFriendList(){
+async function renderFriendList(){
+  friendsCache = await getFriends();
+  renderFriendListFromCache();
+}
+
+function renderFriendListFromCache(){
   const list = document.getElementById("friend-list");
-  const friends = getFriends();
-  if(friends.length===0){
+  if(friendsCache.length===0){
     list.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px;">အကောင့်ဖွင့်ထားတဲ့ သူငယ်ချင်းမရှိသေးပါ</div>`;
     return;
   }
-  list.innerHTML = friends.map(f=>{
+  list.innerHTML = friendsCache.map(f=>{
     const preview = f.lastText
       ? `${f.lastMine ? "You: " : ""}${esc(f.lastText)}`
       : `<span style="color:var(--muted-soft);">Message ပို့လိုက်ပါ</span>`;
@@ -598,9 +752,9 @@ function renderFriendList(){
 }
 
 function openFriend(friendId){
-  activeFriend = getFriends().find(f=>f.id===friendId);
-  renderFriendList();
-  renderChatWindow();
+  activeFriend = friendsCache.find(f=>f.id===friendId) || activeFriend;
+  renderFriendListFromCache();
+  loadAndRenderChat();
   document.getElementById("friend-list").classList.add("chat-open");
   document.getElementById("chat-window").classList.add("chat-open");
 }
@@ -610,6 +764,13 @@ function backToList(){
   document.getElementById("chat-window").classList.remove("chat-open");
 }
 
+async function loadAndRenderChat(){
+  if(!activeFriend){ renderChatWindow(); return; }
+  const key = convoKey(currentUser.username, activeFriend.id);
+  chatsCache[key] = await loadChat(key);
+  renderChatWindow();
+}
+
 function renderChatWindow(){
   const win = document.getElementById("chat-window");
   if(!activeFriend){
@@ -617,7 +778,7 @@ function renderChatWindow(){
     return;
   }
   const key = convoKey(currentUser.username, activeFriend.id);
-  const msgs = state.chats[key] || [];
+  const msgs = chatsCache[key] || [];
   win.innerHTML = `
     <div id="chat-header">
       <button id="back-to-list" onclick="backToList()">←</button>
@@ -646,17 +807,20 @@ async function sendMessage(){
   const input = document.getElementById("msg-draft");
   const text = (input.value||"").trim();
   if(!text || !activeFriend) return;
+  input.value = "";
   const key = convoKey(currentUser.username, activeFriend.id);
-  if(!state.chats[key]) state.chats[key] = [];
-  state.chats[key].push({ id:"m"+Date.now(), from:currentUser.username, text, time:Date.now() });
-  await saveState();
+  const fresh = await loadChat(key);
+  fresh.push({ id:genId("m"), from:currentUser.username, text, time:Date.now() });
+  await saveChat(key, fresh);
+  chatsCache[key] = fresh;
   renderChatWindow();
-  renderFriendList();
+  friendsCache = await getFriends();
+  renderFriendListFromCache();
 }
 
-/* ---------- init ---------- */
 (async function init(){
-  await loadState();
+  const ok = await checkStorageOK();
+  showStorageWarning(!ok);
 })();
 </script>
 </body>
